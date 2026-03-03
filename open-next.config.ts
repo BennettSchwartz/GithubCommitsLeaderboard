@@ -4,5 +4,5 @@ const config = defineCloudflareConfig();
 
 export default {
   ...config,
-  buildCommand: "next build",
+  buildCommand: "next build --webpack",
 };
