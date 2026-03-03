@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 
 import { Providers } from "@/components/providers";
+import { SeoJsonLd, siteMetadata } from "@/app/seo";
 import "./globals.css";
 
 const bodyFont = IBM_Plex_Sans({
@@ -16,10 +17,7 @@ const monoFont = IBM_Plex_Mono({
   weight: ["400", "500", "600"],
 });
 
-export const metadata: Metadata = {
-  title: "GitHub Commit Leaderboard",
-  description: "Public all-time GitHub commit leaderboard built with Next.js, PostgreSQL, and Cloudflare Workers.",
-};
+export const metadata: Metadata = siteMetadata;
 
 export default function RootLayout({
   children,
@@ -28,6 +26,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        <SeoJsonLd />
+      </head>
       <body
         className={`${bodyFont.variable} ${monoFont.variable}`}
         data-color-mode="light"
