@@ -130,7 +130,7 @@ npm run deploy
 
 ## API Documentation
 
-Full API documentation is available at `/api` on any running instance.
+Full API documentation is available at `/api` on any running instance. Available at [this link](https://ghcommits.com) for the official docs. 
 
 ### Endpoints
 
