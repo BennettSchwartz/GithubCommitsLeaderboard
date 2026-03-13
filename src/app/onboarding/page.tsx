@@ -2,6 +2,7 @@
 
 import { CheckIcon, CopyIcon } from "@primer/octicons-react";
 import {
+  Avatar,
   Button,
   Flash,
   Heading,
@@ -30,6 +31,8 @@ interface Result {
   percentile: number;
   totalCommits: number;
   login: string;
+  name: string | null;
+  avatarUrl: string;
 }
 
 function CopyButton({ text }: { text: string }) {
@@ -199,10 +202,22 @@ export default function OnboardingPage() {
 
           {phase === "complete" && result && (
             <>
-              <Stack direction="vertical" gap="normal" align="center">
+              <Avatar src={result.avatarUrl} alt={`${result.login} avatar`} size={96} />
+
+              <Stack direction="vertical" gap="condensed" align="center">
                 <Heading as="h1" style={{ textAlign: "center" }}>
-                  You&apos;re on the Leaderboard!
+                  {result.name ?? result.login}
                 </Heading>
+                <Text size="medium" style={{ color: "var(--fgColor-muted)" }}>
+                  @{result.login}
+                </Text>
+              </Stack>
+
+              <Heading as="h2" style={{ textAlign: "center", color: "var(--fgColor-muted)" }}>
+                You&apos;re on the Leaderboard!
+              </Heading>
+
+              <Stack direction="vertical" gap="condensed" align="center">
                 <Heading
                   as="h2"
                   style={{
@@ -270,11 +285,11 @@ export default function OnboardingPage() {
 
                 <CodeBlock
                   label="Markdown"
-                  code={`[![GitHub Commits Badge](${BASE_URL}/api/badge/${result.login}.svg)](${BASE_URL})`}
+                  code={`[![GitHub Commits Badge](${BASE_URL}/api/badge/${result.login}.svg)](${BASE_URL}/u/${result.login})`}
                 />
                 <CodeBlock
                   label="HTML"
-                  code={`<a href="${BASE_URL}"><img src="${BASE_URL}/api/badge/${result.login}.svg" alt="GitHub Commits Badge" /></a>`}
+                  code={`<a href="${BASE_URL}/u/${result.login}"><img src="${BASE_URL}/api/badge/${result.login}.svg" alt="GitHub Commits Badge" /></a>`}
                 />
                 <CodeBlock
                   label="Image URL"

@@ -144,12 +144,20 @@ export async function POST(request: NextRequest) {
             const totalUsers = Number(countResult.rows[0]?.count ?? "0");
             const percentile = Math.max(1, Math.ceil((1 - (rank - 1) / totalUsers) * 100));
 
+            // Record score history
+            await client.query(
+              `INSERT INTO score_history (user_id, all_time_commits, recorded_at) VALUES ($1, $2, $3)`,
+              [session.userId, totalCommits, checkedAt],
+            );
+
             sendEvent({
               type: "complete",
               rank,
               percentile,
               totalCommits,
               login: session.login,
+              name: session.name,
+              avatarUrl: session.avatarUrl,
             });
           } finally {
             await client.end();
