@@ -123,8 +123,10 @@ function HomeContent() {
       </PageLayout.Header>
       <PageLayout.Content>
         <Stack direction="vertical" gap="normal" padding="normal" align="center">
-          <BadgeSection />
-          <SearchPanel />
+          <div className="badge-search-row" style={{ display: "grid", gridTemplateColumns: "1fr", gap: "var(--base-size-16)", width: "100%" }}>
+            <BadgeSection />
+            <SearchPanel />
+          </div>
           <Stack direction="vertical" gap="condensed" style={{ width: "100%" }}>
             <Heading as="h2" style={{ textAlign: "center" }}>Public Leaderboard</Heading>
             <Stack direction="horizontal" gap="none" justify="center">
@@ -179,6 +181,13 @@ function HomeContent() {
           </Stack>
         </Stack>
       </PageLayout.Content>
+      <style>{`
+        @media (min-width: 768px) {
+          .badge-search-row {
+            grid-template-columns: 1fr 1fr !important;
+          }
+        }
+      `}</style>
     </PageLayout>
   );
 }
