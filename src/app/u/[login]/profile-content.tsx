@@ -111,7 +111,6 @@ function CommitHistory({ login, currentCommits }: { login: string; currentCommit
     <div
       style={{
         width: "100%",
-        maxWidth: "500px",
         padding: "var(--base-size-16)",
         border: "var(--borderWidth-thin) solid var(--borderColor-default)",
         borderRadius: "var(--borderRadius-medium)",
@@ -302,129 +301,158 @@ export function ProfileContent(props: ProfileContentProps) {
   const displayName = props.name ?? props.login;
 
   return (
-    <PageLayout containerWidth="medium" padding="normal">
+    <PageLayout containerWidth="xlarge" padding="normal">
       <PageLayout.Content>
-        <Stack direction="vertical" gap="spacious" padding="spacious" align="center">
+        <Stack direction="vertical" gap="normal" padding="normal">
           <JoinBanner />
-          <Avatar src={props.avatarUrl} alt={`${props.login} avatar`} size={96} />
-
-          <Stack direction="vertical" gap="condensed" align="center">
-            <Heading as="h1" style={{ textAlign: "center" }}>
-              {displayName}
-            </Heading>
-            <Text size="medium" style={{ color: "var(--fgColor-muted)" }}>
-              @{props.login}
-            </Text>
-          </Stack>
-
-          <Stack direction="vertical" gap="condensed" align="center">
-            <Heading
-              as="h2"
-              style={{
-                textAlign: "center",
-                fontSize: "var(--text-display-size)",
-                color: "var(--fgColor-accent)",
-              }}
-            >
-              Rank #{props.rank}
-            </Heading>
-            <Text size="large" style={{ textAlign: "center" }}>
-              Top {props.percentile}% by GitHub commits
-            </Text>
-          </Stack>
-
-          <Stack direction="horizontal" gap="spacious" wrap="wrap" justify="center">
-            <Stack direction="vertical" gap="none" align="center">
-              <Text size="small" weight="light">All-time commits</Text>
-              <Text size="large" weight="semibold">
-                {props.allTimeCommits.toLocaleString()}
-              </Text>
-            </Stack>
-            <Stack direction="vertical" gap="none" align="center">
-              <Text size="small" weight="light">GitHub member since</Text>
-              <Text size="large" weight="semibold">
-                {formatDate(props.githubCreatedAt)}
-              </Text>
-            </Stack>
-          </Stack>
-
-          <PrimerLink href={props.profileUrl} target="_blank" rel="noreferrer">
-            View on GitHub
-          </PrimerLink>
-
-          <ShareButtons
-            siteUrl={props.siteUrl}
-            login={props.login}
-            displayName={displayName}
-            rank={props.rank}
-            percentile={props.percentile}
-          />
-
-          <CommitHistory login={props.login} currentCommits={props.allTimeCommits} />
 
           <div
             style={{
-              width: "100%",
-              maxWidth: "500px",
-              height: "var(--borderWidth-thin)",
-              backgroundColor: "var(--borderColor-default)",
+              display: "grid",
+              gridTemplateColumns: "1fr",
+              gap: "var(--base-size-24)",
+              alignItems: "start",
             }}
-          />
-
-          <Stack
-            direction="vertical"
-            gap="normal"
-            style={{ width: "100%", maxWidth: "500px" }}
+            className="profile-grid"
           >
-            <Stack direction="vertical" gap="condensed" align="center">
-              <Heading
-                as="h2"
-                style={{
-                  textAlign: "center",
-                  fontSize: "var(--text-title-size-medium)",
-                }}
-              >
-                Embed this badge
-              </Heading>
-            </Stack>
-
+            {/* Left column: identity + stats */}
             <div
               style={{
-                padding: "var(--base-size-12)",
-                backgroundColor: "var(--bgColor-muted)",
+                padding: "var(--base-size-24)",
                 border: "var(--borderWidth-thin) solid var(--borderColor-default)",
                 borderRadius: "var(--borderRadius-medium)",
-                display: "flex",
-                justifyContent: "center",
+                backgroundColor: "var(--bgColor-muted)",
               }}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={`/api/badge/${props.login}.svg`}
-                alt={`GitHub Commits Badge for ${props.login}`}
-                height={28}
-              />
+              <Stack direction="vertical" gap="normal" align="center">
+                <Avatar src={props.avatarUrl} alt={`${props.login} avatar`} size={96} />
+
+                <Stack direction="vertical" gap="condensed" align="center">
+                  <Heading as="h1" style={{ textAlign: "center" }}>
+                    {displayName}
+                  </Heading>
+                  <Text size="medium" style={{ color: "var(--fgColor-muted)" }}>
+                    @{props.login}
+                  </Text>
+                </Stack>
+
+                <Stack direction="vertical" gap="condensed" align="center">
+                  <Heading
+                    as="h2"
+                    style={{
+                      textAlign: "center",
+                      fontSize: "var(--text-display-size)",
+                      color: "var(--fgColor-accent)",
+                    }}
+                  >
+                    Rank #{props.rank}
+                  </Heading>
+                  <Text size="large" style={{ textAlign: "center" }}>
+                    Top {props.percentile}% by GitHub commits
+                  </Text>
+                </Stack>
+
+                <Stack direction="horizontal" gap="spacious" wrap="wrap" justify="center">
+                  <Stack direction="vertical" gap="none" align="center">
+                    <Text size="small" weight="light">All-time commits</Text>
+                    <Text size="large" weight="semibold">
+                      {props.allTimeCommits.toLocaleString()}
+                    </Text>
+                  </Stack>
+                  <Stack direction="vertical" gap="none" align="center">
+                    <Text size="small" weight="light">GitHub member since</Text>
+                    <Text size="large" weight="semibold">
+                      {formatDate(props.githubCreatedAt)}
+                    </Text>
+                  </Stack>
+                </Stack>
+
+                <PrimerLink href={props.profileUrl} target="_blank" rel="noreferrer">
+                  View on GitHub
+                </PrimerLink>
+
+                <ShareButtons
+                  siteUrl={props.siteUrl}
+                  login={props.login}
+                  displayName={displayName}
+                  rank={props.rank}
+                  percentile={props.percentile}
+                />
+              </Stack>
             </div>
 
-            <CodeBlock
-              label="Markdown"
-              code={`[![GitHub Commits Badge](${props.siteUrl}/api/badge/${props.login}.svg)](${props.siteUrl}/u/${props.login})`}
-            />
-            <CodeBlock
-              label="HTML"
-              code={`<a href="${props.siteUrl}/u/${props.login}"><img src="${props.siteUrl}/api/badge/${props.login}.svg" alt="GitHub Commits Badge" /></a>`}
-            />
-            <CodeBlock
-              label="Image URL"
-              code={`${props.siteUrl}/api/badge/${props.login}.svg`}
-            />
-          </Stack>
+            {/* Right column: history + badge embed */}
+            <Stack direction="vertical" gap="normal">
+              <CommitHistory login={props.login} currentCommits={props.allTimeCommits} />
 
-          <Stack direction="horizontal" gap="normal">
+              <div
+                style={{
+                  padding: "var(--base-size-24)",
+                  border: "var(--borderWidth-thin) solid var(--borderColor-default)",
+                  borderRadius: "var(--borderRadius-medium)",
+                  backgroundColor: "var(--bgColor-muted)",
+                }}
+              >
+                <Stack direction="vertical" gap="normal">
+                  <Heading
+                    as="h2"
+                    style={{
+                      textAlign: "center",
+                      fontSize: "var(--text-title-size-medium)",
+                    }}
+                  >
+                    Embed this badge
+                  </Heading>
+
+                  <div
+                    style={{
+                      padding: "var(--base-size-12)",
+                      backgroundColor: "var(--bgColor-default)",
+                      border: "var(--borderWidth-thin) solid var(--borderColor-default)",
+                      borderRadius: "var(--borderRadius-medium)",
+                      display: "flex",
+                      justifyContent: "center",
+                    }}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={`/api/badge/${props.login}.svg`}
+                      alt={`GitHub Commits Badge for ${props.login}`}
+                      height={28}
+                    />
+                  </div>
+
+                  <CodeBlock
+                    label="Markdown"
+                    code={`[![GitHub Commits Badge](${props.siteUrl}/api/badge/${props.login}.svg)](${props.siteUrl}/u/${props.login})`}
+                  />
+                  <CodeBlock
+                    label="HTML"
+                    code={`<a href="${props.siteUrl}/u/${props.login}"><img src="${props.siteUrl}/api/badge/${props.login}.svg" alt="GitHub Commits Badge" /></a>`}
+                  />
+                  <CodeBlock
+                    label="Image URL"
+                    code={`${props.siteUrl}/api/badge/${props.login}.svg`}
+                  />
+                </Stack>
+              </div>
+            </Stack>
+          </div>
+
+          <Stack direction="horizontal" gap="normal" justify="center" padding="normal">
             <PrimerLink href="/compare">Compare with another developer</PrimerLink>
             <PrimerLink href="/">← Back to leaderboard</PrimerLink>
           </Stack>
         </Stack>
+
+        {/* Two-column on desktop, single column on mobile */}
+        <style>{`
+          @media (min-width: 768px) {
+            .profile-grid {
+              grid-template-columns: 1fr 1fr !important;
+            }
+          }
+        `}</style>
       </PageLayout.Content>
     </PageLayout>
   );
