@@ -43,6 +43,18 @@ The easiest way to participate is to use the official instance at **[ghcommits.c
 
 Your commit count is refreshed automatically every 3 days.
 
+### Get Your Badge
+
+Once you're on the leaderboard, you can generate an embeddable badge showing your rank:
+
+[![GitHub Commits Badge](https://ghcommits.com/api/badge/GustyCube.svg)](https://ghcommits.com)
+
+```markdown
+[![GitHub Commits Badge](https://ghcommits.com/api/badge/YOUR_USERNAME.svg)](https://ghcommits.com)
+```
+
+Visit [ghcommits.com](https://ghcommits.com) to generate your badge with the correct embed code.
+
 ---
 
 ## Self-Hosting
@@ -151,6 +163,7 @@ Full API documentation is available at `/api` on any running instance. Available
 | `GET /api/leaderboard`  | Paginated leaderboard    | 60/min, 1000/day |
 | `GET /api/user/{login}` | Lookup user by username  | 20/min, 200/day  |
 | `GET /api/rank/{n}`     | Get user at rank N       | 20/min, 200/day  |
+| `GET /api/badge/{login}`| SVG rank badge (`.svg` optional) | 20/min, 200/day  |
 
 ### Example Response
 
