@@ -282,7 +282,10 @@ export default function OnboardingPage() {
                 />
               </Stack>
 
-              <PrimerLink href="/">← Back to leaderboard</PrimerLink>
+              <Stack direction="horizontal" gap="normal">
+                <PrimerLink href={`/u/${result.login}`}>View your profile →</PrimerLink>
+                <PrimerLink href="/">← Back to leaderboard</PrimerLink>
+              </Stack>
             </>
           )}
 
