@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckIcon, CopyIcon } from "@primer/octicons-react";
+import { CheckIcon, CopyIcon, LinkIcon, ShareIcon } from "@primer/octicons-react";
 import {
   Avatar,
   Button,
@@ -75,6 +75,53 @@ function formatDate(value: string) {
     day: "numeric",
     year: "numeric",
   }).format(new Date(value));
+}
+
+function ShareButtons({
+  siteUrl,
+  login,
+  displayName,
+  rank,
+  percentile,
+}: {
+  siteUrl: string;
+  login: string;
+  displayName: string;
+  rank: number;
+  percentile: number;
+}) {
+  const [linkCopied, setLinkCopied] = useState(false);
+  const profileUrl = `${siteUrl}/u/${login}`;
+  const tweetText = `I'm ranked #${rank} (Top ${percentile}%) on the GitHub Commits Leaderboard! ${profileUrl}`;
+  const twitterUrl = `https://x.com/intent/tweet?text=${encodeURIComponent(tweetText)}`;
+
+  async function handleCopyLink() {
+    await navigator.clipboard.writeText(profileUrl);
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 2000);
+  }
+
+  return (
+    <Stack direction="horizontal" gap="condensed">
+      <Button
+        as="a"
+        href={twitterUrl}
+        target="_blank"
+        rel="noreferrer"
+        leadingVisual={ShareIcon}
+        size="small"
+      >
+        Share on X
+      </Button>
+      <Button
+        leadingVisual={linkCopied ? CheckIcon : LinkIcon}
+        size="small"
+        onClick={handleCopyLink}
+      >
+        {linkCopied ? "Copied!" : "Copy link"}
+      </Button>
+    </Stack>
+  );
 }
 
 type ProfileFoundProps = {
@@ -165,6 +212,14 @@ export function ProfileContent(props: ProfileContentProps) {
           <PrimerLink href={props.profileUrl} target="_blank" rel="noreferrer">
             View on GitHub
           </PrimerLink>
+
+          <ShareButtons
+            siteUrl={props.siteUrl}
+            login={props.login}
+            displayName={displayName}
+            rank={props.rank}
+            percentile={props.percentile}
+          />
 
           <div
             style={{
