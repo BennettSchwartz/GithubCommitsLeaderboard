@@ -9,6 +9,7 @@ import { Suspense, useEffect, useState } from "react";
 import { BadgeSection } from "@/components/badge-section";
 import { LeaderboardClient } from "@/components/leaderboard-client";
 import { SearchPanel } from "@/components/search-panel";
+import { TimeBasedLeaderboard } from "@/components/time-based-leaderboard";
 import type { LeaderboardResponse } from "@/lib/types";
 
 const REPO_URL = process.env.NEXT_PUBLIC_REPOSITORY_URL ?? "https://github.com/your-org/GithubCommitsLeaderboard";
@@ -44,11 +45,14 @@ function getStatusMessage(errorCode: string | null, connected: string | null) {
   return null;
 }
 
+type LeaderboardTab = "all-time" | "time-based";
+
 function HomeContent() {
   const searchParams = useSearchParams();
   const [leaderboard, setLeaderboard] = useState<LeaderboardResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<LeaderboardTab>("all-time");
 
   const status = getStatusMessage(
     searchParams.get("error"),
@@ -123,19 +127,55 @@ function HomeContent() {
           <SearchPanel />
           <Stack direction="vertical" gap="condensed">
             <Heading as="h2">Public Leaderboard</Heading>
-            <Text size="small" weight="light">
-              Sorted by all-time commits descending
-            </Text>
-            {isLoading ? (
-              <Stack direction="horizontal" gap="condensed" align="center" justify="center" padding="spacious">
-                <Spinner size="medium" />
-                <Text>Loading leaderboard...</Text>
-              </Stack>
-            ) : error ? (
-              <Flash variant="danger">{error}</Flash>
-            ) : leaderboard ? (
-              <LeaderboardClient initialPage={leaderboard} />
-            ) : null}
+            <Stack direction="horizontal" gap="none">
+              {(["all-time", "time-based"] as const).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  style={{
+                    padding: "var(--base-size-8) var(--base-size-16)",
+                    border: "var(--borderWidth-thin) solid var(--borderColor-default)",
+                    backgroundColor:
+                      activeTab === tab ? "var(--bgColor-accent-muted)" : "var(--bgColor-default)",
+                    color: activeTab === tab ? "var(--fgColor-accent)" : "var(--fgColor-muted)",
+                    fontSize: "var(--text-body-size-small)",
+                    fontWeight: activeTab === tab ? 600 : 400,
+                    cursor: "pointer",
+                    borderRadius: 0,
+                    ...(tab === "all-time"
+                      ? { borderTopLeftRadius: "var(--borderRadius-medium)", borderBottomLeftRadius: "var(--borderRadius-medium)" }
+                      : { borderTopRightRadius: "var(--borderRadius-medium)", borderBottomRightRadius: "var(--borderRadius-medium)" }),
+                  }}
+                >
+                  {tab === "all-time" ? "All Time" : "Recent Activity"}
+                </button>
+              ))}
+            </Stack>
+
+            {activeTab === "all-time" ? (
+              <>
+                <Text size="small" weight="light">
+                  Sorted by all-time commits descending
+                </Text>
+                {isLoading ? (
+                  <Stack direction="horizontal" gap="condensed" align="center" justify="center" padding="spacious">
+                    <Spinner size="medium" />
+                    <Text>Loading leaderboard...</Text>
+                  </Stack>
+                ) : error ? (
+                  <Flash variant="danger">{error}</Flash>
+                ) : leaderboard ? (
+                  <LeaderboardClient initialPage={leaderboard} />
+                ) : null}
+              </>
+            ) : (
+              <>
+                <Text size="small" weight="light">
+                  Ranked by commits gained in the selected period
+                </Text>
+                <TimeBasedLeaderboard />
+              </>
+            )}
           </Stack>
         </Stack>
       </PageLayout.Content>
