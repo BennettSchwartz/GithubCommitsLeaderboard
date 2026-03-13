@@ -122,12 +122,12 @@ function HomeContent() {
         </Stack>
       </PageLayout.Header>
       <PageLayout.Content>
-        <Stack direction="vertical" gap="normal" padding="normal">
+        <Stack direction="vertical" gap="normal" padding="normal" align="center">
           <BadgeSection />
           <SearchPanel />
-          <Stack direction="vertical" gap="condensed">
-            <Heading as="h2">Public Leaderboard</Heading>
-            <Stack direction="horizontal" gap="none">
+          <Stack direction="vertical" gap="condensed" style={{ width: "100%" }}>
+            <Heading as="h2" style={{ textAlign: "center" }}>Public Leaderboard</Heading>
+            <Stack direction="horizontal" gap="none" justify="center">
               {(["all-time", "time-based"] as const).map((tab) => (
                 <button
                   key={tab}
@@ -154,7 +154,7 @@ function HomeContent() {
 
             {activeTab === "all-time" ? (
               <>
-                <Text size="small" weight="light">
+                <Text size="small" weight="light" style={{ textAlign: "center" }}>
                   Sorted by all-time commits descending
                 </Text>
                 {isLoading ? (
@@ -170,7 +170,7 @@ function HomeContent() {
               </>
             ) : (
               <>
-                <Text size="small" weight="light">
+                <Text size="small" weight="light" style={{ textAlign: "center" }}>
                   Ranked by commits gained in the selected period
                 </Text>
                 <TimeBasedLeaderboard />
