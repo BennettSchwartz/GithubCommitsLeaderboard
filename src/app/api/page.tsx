@@ -38,6 +38,18 @@ const endpoints = [
     ],
     response: ["version", "generatedAt", "found", "data"],
   },
+  {
+    method: "GET",
+    path: "/api/badge/{login}",
+    query: "?theme=light",
+    description: "Returns an SVG badge showing the user's rank. Unregistered users get a prompt to join. Embed in READMEs or websites. Append .svg to the login for explicit file extension (optional).",
+    rateLimit: "20/min/IP, 200/day/IP",
+    params: [
+      { name: "login", type: "string", description: "GitHub username, case-insensitive, leading @ ignored. .svg extension is optional." },
+      { name: "theme", type: "string", description: '"light" (default) or "dark"' },
+    ],
+    response: ["SVG image (Content-Type: image/svg+xml)"],
+  },
 ];
 
 function EndpointCard({ endpoint }: { endpoint: typeof endpoints[0] }) {

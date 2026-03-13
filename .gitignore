@@ -48,3 +48,5 @@ next-env.d.ts
 /app-temp/
 /app-next/
 plan.md
+.superpowers/
+/docs/superpowers/

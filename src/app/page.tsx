@@ -6,6 +6,7 @@ import { Stack } from "@primer/react/experimental";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 
+import { BadgeSection } from "@/components/badge-section";
 import { LeaderboardClient } from "@/components/leaderboard-client";
 import { SearchPanel } from "@/components/search-panel";
 import type { LeaderboardResponse } from "@/lib/types";
@@ -111,6 +112,7 @@ function HomeContent() {
       </PageLayout.Header>
       <PageLayout.Content>
         <Stack direction="vertical" gap="normal" padding="normal">
+          <BadgeSection />
           <SearchPanel />
           <Stack direction="vertical" gap="condensed">
             <Heading as="h2">Public Leaderboard</Heading>

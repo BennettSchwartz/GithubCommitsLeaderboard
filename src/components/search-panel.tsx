@@ -123,6 +123,25 @@ export function SearchPanel() {
                     </Text>
                   </Stack>
                 </Stack>
+                <Stack direction="vertical" gap="condensed">
+                  <Text size="small" weight="semibold">Badge</Text>
+                  <pre
+                    style={{
+                      padding: "var(--base-size-8) var(--base-size-12)",
+                      backgroundColor: "var(--bgColor-muted)",
+                      border: "var(--borderWidth-thin) solid var(--borderColor-default)",
+                      borderRadius: "var(--borderRadius-medium)",
+                      fontFamily: "var(--fontStack-monospace)",
+                      fontSize: "var(--text-body-size-small)",
+                      overflow: "auto",
+                      whiteSpace: "pre-wrap",
+                      wordBreak: "break-all",
+                      margin: 0,
+                    }}
+                  >
+                    {`[![GitHub Commits Badge](https://ghcommits.com/api/badge/${result.data.login}.svg)](https://ghcommits.com)`}
+                  </pre>
+                </Stack>
               </Stack>
             </div>
           ) : (
