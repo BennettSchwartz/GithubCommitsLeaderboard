@@ -155,11 +155,11 @@ export async function fetchCommitContributionTotal(
   return totalCommitContributions + restrictedContributionsCount;
 }
 
-function endOfMonthUtc(year: number, month: number) {
-  return new Date(Date.UTC(year, month + 1, 0, 23, 59, 59, 999));
+function endOfYearUtc(year: number) {
+  return new Date(Date.UTC(year, 11, 31, 23, 59, 59, 999));
 }
 
-export function buildMonthlyContributionWindows(startIso: string, endDate = new Date()) {
+export function buildYearlyContributionWindows(startIso: string, endDate = new Date()) {
   const start = new Date(startIso);
   const end = new Date(endDate);
 
@@ -171,8 +171,8 @@ export function buildMonthlyContributionWindows(startIso: string, endDate = new 
   let cursor = start;
 
   while (cursor < end) {
-    const monthEnd = endOfMonthUtc(cursor.getUTCFullYear(), cursor.getUTCMonth());
-    const windowEnd = monthEnd < end ? monthEnd : end;
+    const yearEnd = endOfYearUtc(cursor.getUTCFullYear());
+    const windowEnd = yearEnd < end ? yearEnd : end;
 
     windows.push({
       from: cursor.toISOString(),
@@ -186,7 +186,7 @@ export function buildMonthlyContributionWindows(startIso: string, endDate = new 
 }
 
 export async function computeAllTimeCommits(accessToken: string, githubCreatedAt: string, now = new Date()) {
-  const windows = buildMonthlyContributionWindows(githubCreatedAt, now);
+  const windows = buildYearlyContributionWindows(githubCreatedAt, now);
   let total = 0;
 
   for (const window of windows) {
