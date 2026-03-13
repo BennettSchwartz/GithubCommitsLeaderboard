@@ -10,7 +10,7 @@ import {
   Text,
 } from "@primer/react";
 import { Stack } from "@primer/react/experimental";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -75,6 +75,141 @@ function formatDate(value: string) {
     day: "numeric",
     year: "numeric",
   }).format(new Date(value));
+}
+
+type HistoryEntry = { allTimeCommits: number; recordedAt: string };
+
+const PERIODS = [
+  { label: "7d", days: 7 },
+  { label: "30d", days: 30 },
+  { label: "90d", days: 90 },
+  { label: "1y", days: 365 },
+] as const;
+
+function CommitHistory({ login, currentCommits }: { login: string; currentCommits: number }) {
+  const [days, setDays] = useState(30);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    fetch(`/api/user/${encodeURIComponent(login)}/history?days=${days}`)
+      .then((r) => r.json())
+      .then((data) => {
+        setHistory(data.history ?? []);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, [login, days]);
+
+  const oldest = history.length > 0 ? history[0] : null;
+  const commitDelta = oldest ? currentCommits - oldest.allTimeCommits : 0;
+
+  return (
+    <div
+      style={{
+        width: "100%",
+        maxWidth: "500px",
+        padding: "var(--base-size-16)",
+        border: "var(--borderWidth-thin) solid var(--borderColor-default)",
+        borderRadius: "var(--borderRadius-medium)",
+        backgroundColor: "var(--bgColor-muted)",
+      }}
+    >
+      <Stack direction="vertical" gap="normal">
+        <Stack direction="horizontal" gap="condensed" align="center" justify="space-between">
+          <Text size="small" weight="semibold">Commit Growth</Text>
+          <Stack direction="horizontal" gap="none">
+            {PERIODS.map((p) => (
+              <button
+                key={p.days}
+                onClick={() => setDays(p.days)}
+                style={{
+                  padding: "var(--base-size-4) var(--base-size-8)",
+                  border: "var(--borderWidth-thin) solid var(--borderColor-default)",
+                  backgroundColor:
+                    days === p.days
+                      ? "var(--bgColor-accent-muted)"
+                      : "var(--bgColor-default)",
+                  color:
+                    days === p.days
+                      ? "var(--fgColor-accent)"
+                      : "var(--fgColor-muted)",
+                  fontSize: "var(--text-body-size-small)",
+                  cursor: "pointer",
+                  borderRadius: 0,
+                  ...(p.days === PERIODS[0].days
+                    ? { borderTopLeftRadius: "var(--borderRadius-small)", borderBottomLeftRadius: "var(--borderRadius-small)" }
+                    : p.days === PERIODS[PERIODS.length - 1].days
+                      ? { borderTopRightRadius: "var(--borderRadius-small)", borderBottomRightRadius: "var(--borderRadius-small)" }
+                      : {}),
+                }}
+              >
+                {p.label}
+              </button>
+            ))}
+          </Stack>
+        </Stack>
+
+        {loading ? (
+          <Text size="small" style={{ color: "var(--fgColor-muted)", textAlign: "center" }}>
+            Loading...
+          </Text>
+        ) : history.length === 0 ? (
+          <Text size="small" style={{ color: "var(--fgColor-muted)", textAlign: "center" }}>
+            No history data yet for this period.
+          </Text>
+        ) : (
+          <>
+            {/* Simple bar visualization */}
+            <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: 60 }}>
+              {history.map((entry, i) => {
+                const min = history.reduce((m, e) => Math.min(m, e.allTimeCommits), Infinity);
+                const max = Math.max(currentCommits, history.reduce((m, e) => Math.max(m, e.allTimeCommits), 0));
+                const range = max - min || 1;
+                const height = Math.max(4, ((entry.allTimeCommits - min) / range) * 56);
+                return (
+                  <div
+                    key={i}
+                    title={`${entry.allTimeCommits.toLocaleString()} commits — ${formatDate(entry.recordedAt)}`}
+                    style={{
+                      flex: 1,
+                      height,
+                      backgroundColor: "var(--fgColor-accent)",
+                      borderRadius: 2,
+                      opacity: 0.6 + (i / history.length) * 0.4,
+                    }}
+                  />
+                );
+              })}
+            </div>
+
+            <Stack direction="horizontal" gap="spacious" justify="center">
+              <Stack direction="vertical" gap="none" align="center">
+                <Text size="small" weight="light">Commits added</Text>
+                <Text
+                  size="large"
+                  weight="semibold"
+                  style={{
+                    color: commitDelta > 0 ? "#238636" : "var(--fgColor-muted)",
+                  }}
+                >
+                  {commitDelta > 0 ? "+" : ""}
+                  {commitDelta.toLocaleString()}
+                </Text>
+              </Stack>
+              <Stack direction="vertical" gap="none" align="center">
+                <Text size="small" weight="light">Data points</Text>
+                <Text size="large" weight="semibold">
+                  {history.length}
+                </Text>
+              </Stack>
+            </Stack>
+          </>
+        )}
+      </Stack>
+    </div>
+  );
 }
 
 function ShareButtons({
@@ -220,6 +355,8 @@ export function ProfileContent(props: ProfileContentProps) {
             rank={props.rank}
             percentile={props.percentile}
           />
+
+          <CommitHistory login={props.login} currentCommits={props.allTimeCommits} />
 
           <div
             style={{
