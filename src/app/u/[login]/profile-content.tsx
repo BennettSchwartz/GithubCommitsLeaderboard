@@ -12,6 +12,8 @@ import {
 import { Stack } from "@primer/react/experimental";
 import { useEffect, useState } from "react";
 
+import { JoinBanner } from "@/components/join-banner";
+
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
 
@@ -285,6 +287,7 @@ export function ProfileContent(props: ProfileContentProps) {
       <PageLayout containerWidth="medium" padding="normal">
         <PageLayout.Content>
           <Stack direction="vertical" gap="spacious" padding="spacious" align="center">
+            <JoinBanner />
             <Heading as="h1">User Not Found</Heading>
             <Text size="medium" style={{ color: "var(--fgColor-muted)" }}>
               This user hasn&apos;t joined the leaderboard yet.
@@ -302,6 +305,7 @@ export function ProfileContent(props: ProfileContentProps) {
     <PageLayout containerWidth="medium" padding="normal">
       <PageLayout.Content>
         <Stack direction="vertical" gap="spacious" padding="spacious" align="center">
+          <JoinBanner />
           <Avatar src={props.avatarUrl} alt={`${props.login} avatar`} size={96} />
 
           <Stack direction="vertical" gap="condensed" align="center">

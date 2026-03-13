@@ -14,6 +14,8 @@ import { Stack } from "@primer/react/experimental";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { JoinBanner } from "@/components/join-banner";
+
 type UserData = {
   rank: number;
   percentile: number;
@@ -237,6 +239,7 @@ export function CompareContent({
     <PageLayout containerWidth="large" padding="normal">
       <PageLayout.Content>
         <Stack direction="vertical" gap="spacious" padding="spacious" align="center">
+          <JoinBanner />
           <Heading as="h1" style={{ textAlign: "center" }}>
             Compare Developers
           </Heading>
