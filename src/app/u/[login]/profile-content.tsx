@@ -279,7 +279,10 @@ export function ProfileContent(props: ProfileContentProps) {
             />
           </Stack>
 
-          <PrimerLink href="/">← Back to leaderboard</PrimerLink>
+          <Stack direction="horizontal" gap="normal">
+            <PrimerLink href="/compare">Compare with another developer</PrimerLink>
+            <PrimerLink href="/">← Back to leaderboard</PrimerLink>
+          </Stack>
         </Stack>
       </PageLayout.Content>
     </PageLayout>

@@ -99,6 +99,9 @@ function HomeContent() {
             <Button as="a" href={REPO_URL}>
               <MarkGithubIcon size={16} /> Repository
             </Button>
+            <Button as="a" href="/compare">
+              Compare
+            </Button>
             <Button as="a" href="/api">
               API Docs
             </Button>
