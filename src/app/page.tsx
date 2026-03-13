@@ -108,6 +108,10 @@ function HomeContent() {
               {leaderboard.data.length}+ developers on the leaderboard
             </Text>
           )}
+          <a href="https://www.producthunt.com/products/github-commits-leaderboard?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-github-commits-leaderboard" target="_blank" rel="noopener noreferrer">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img alt="GitHub Commits Leaderboard - See where you rank among developers by GitHub commits | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1097728&theme=light&t=1773428385218" />
+          </a>
         </Stack>
       </PageLayout.Header>
       <PageLayout.Content>
