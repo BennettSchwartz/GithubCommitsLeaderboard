@@ -50,6 +50,7 @@ type LeaderboardTab = "all-time" | "time-based";
 function HomeContent() {
   const searchParams = useSearchParams();
   const [leaderboard, setLeaderboard] = useState<LeaderboardResponse | null>(null);
+  const [totalUsers, setTotalUsers] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<LeaderboardTab>("all-time");
@@ -75,7 +76,19 @@ function HomeContent() {
       }
     }
 
+    async function fetchStats() {
+      try {
+        const response = await fetch("/api/stats");
+        if (!response.ok) return;
+        const data = (await response.json()) as { totalUsers: number };
+        setTotalUsers(data.totalUsers);
+      } catch {
+        // non-critical; leave totalUsers null so the caption falls back gracefully
+      }
+    }
+
     fetchLeaderboard();
+    fetchStats();
   }, []);
 
   return (
@@ -113,9 +126,9 @@ function HomeContent() {
               API Docs
             </Button>
           </Stack>
-          {leaderboard && leaderboard.data.length > 0 && (
+          {totalUsers !== null && totalUsers > 0 && (
             <Text size="small" style={{ color: "var(--fgColor-muted)" }}>
-              {leaderboard.data.length}+ developers on the leaderboard
+              {totalUsers} developers on the leaderboard
             </Text>
           )}
           <a href="https://www.producthunt.com/products/github-commits-leaderboard?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-github-commits-leaderboard" target="_blank" rel="noopener noreferrer">
