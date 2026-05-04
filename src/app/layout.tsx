@@ -31,8 +31,9 @@ export default function RootLayout({
       </head>
       <body
         className={`${bodyFont.variable} ${monoFont.variable}`}
-        data-color-mode="light"
+        data-color-mode="auto"
         data-light-theme="light"
+        data-dark-theme="dark"
       >
         <Providers>{children}</Providers>
       </body>

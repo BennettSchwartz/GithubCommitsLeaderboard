@@ -11,7 +11,8 @@
     "cf-typegen": "wrangler types --env-interface CloudflareEnv",
     "db:migrate": "node scripts/migrate.mjs",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "node scripts/theme-launch-badge.test.mjs"
   },
   "dependencies": {
     "@opennextjs/cloudflare": "^1.17.1",

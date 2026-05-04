@@ -5,8 +5,9 @@
 @import '@primer/primitives/dist/css/functional/size/size.css';
 @import '@primer/primitives/dist/css/functional/typography/typography.css';
 
-/* Primer Primitives - Color Theme (light only) */
+/* Primer Primitives - Color Themes */
 @import '@primer/primitives/dist/css/functional/themes/light.css';
+@import '@primer/primitives/dist/css/functional/themes/dark.css';
 
 * {
   box-sizing: border-box;
