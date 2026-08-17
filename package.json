@@ -12,7 +12,11 @@
     "db:migrate": "node scripts/migrate.mjs",
     "start": "next start",
     "lint": "eslint",
-    "test": "node scripts/theme-launch-badge.test.mjs"
+    "test": "npm run test:unit",
+    "test:unit": "node --import tsx --test scripts/theme-launch-badge.test.mjs scripts/refresh-contract.test.mjs scripts/github-refresh.test.mjs scripts/postgres.test.mjs scripts/isolated-postgres.test.mjs scripts/refresh-producer.test.mjs scripts/refresh-consumer.test.mjs scripts/refresh-dlq.test.mjs scripts/refresh-entrypoints.test.mjs scripts/refresh-worker-config.test.mjs",
+    "test:integration": "node --import tsx --test --test-concurrency=1 scripts/refresh-migration.integration.test.mjs scripts/refresh-repository.integration.test.mjs scripts/refresh-producer.integration.test.mjs",
+    "test:types": "tsc --noEmit --incremental false",
+    "test:worker": "tsc -p tsconfig.worker.json --noEmit"
   },
   "dependencies": {
     "@opennextjs/cloudflare": "^1.17.1",
@@ -33,6 +37,7 @@
     "babel-plugin-react-compiler": "1.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
+    "tsx": "4.23.12",
     "typescript": "^5",
     "wrangler": "^4.69.0"
   }

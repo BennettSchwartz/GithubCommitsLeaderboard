@@ -30,5 +30,11 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules", "worker.ts", "worker.generated.d.ts", ".open-next"]
+  "exclude": [
+    "node_modules",
+    "worker.ts",
+    "worker.generated.d.ts",
+    "worker-configuration.d.ts",
+    ".open-next"
+  ]
 }

@@ -118,101 +118,21 @@ export async function getViewerIdentity(accessToken: string) {
   } satisfies GitHubIdentity;
 }
 
-export async function fetchCommitContributionTotal(
-  accessToken: string,
-  from: string,
-  to: string,
-) {
-  const data = await fetchGitHubGraphql<{
-    viewer: {
-      contributionsCollection: {
-        totalCommitContributions: number;
-        restrictedContributionsCount: number;
-      };
-    };
-  }>(
-    accessToken,
-    `
-      query ContributionWindow($from: DateTime!, $to: DateTime!) {
-        viewer {
-          contributionsCollection(from: $from, to: $to) {
-            totalCommitContributions
-            restrictedContributionsCount
-          }
-        }
-      }
-    `,
-    {
-      from,
-      to,
-    },
-  );
+export {
+  GitHubRequestBudget,
+  GitHubRequestError,
+  buildYearlyContributionWindows,
+  computeAllTimeCommits,
+  computeIncrementalCommits,
+  fetchCommitContributionTotal,
+  requestGitHubGraphql,
+} from "./github-refresh";
 
-  // totalCommitContributions = public commits
-  // restrictedContributionsCount = private repo contributions
-  // Sum both to get true all-time commits
-  const { totalCommitContributions, restrictedContributionsCount } = data.viewer.contributionsCollection;
-  return totalCommitContributions + restrictedContributionsCount;
-}
-
-function endOfYearUtc(year: number) {
-  return new Date(Date.UTC(year, 11, 31, 23, 59, 59, 999));
-}
-
-export function buildYearlyContributionWindows(startIso: string, endDate = new Date()) {
-  const start = new Date(startIso);
-  const end = new Date(endDate);
-
-  if (start >= end) {
-    return [];
-  }
-
-  const windows: Array<{ from: string; to: string }> = [];
-  let cursor = start;
-
-  while (cursor < end) {
-    const yearEnd = endOfYearUtc(cursor.getUTCFullYear());
-    const windowEnd = yearEnd < end ? yearEnd : end;
-
-    windows.push({
-      from: cursor.toISOString(),
-      to: windowEnd.toISOString(),
-    });
-
-    cursor = new Date(windowEnd.getTime() + 1);
-  }
-
-  return windows;
-}
-
-export async function computeAllTimeCommits(accessToken: string, githubCreatedAt: string, now = new Date()) {
-  const windows = buildYearlyContributionWindows(githubCreatedAt, now);
-  let total = 0;
-
-  for (const window of windows) {
-    total += await fetchCommitContributionTotal(accessToken, window.from, window.to);
-  }
-
-  return {
-    total,
-    checkedAt: now.toISOString(),
-  };
-}
-
-export async function computeIncrementalCommits(accessToken: string, lastCheckedAt: string, now = new Date()) {
-  const fromDate = new Date(new Date(lastCheckedAt).getTime() + 1);
-
-  if (fromDate >= now) {
-    return {
-      delta: 0,
-      checkedAt: now.toISOString(),
-    };
-  }
-
-  const delta = await fetchCommitContributionTotal(accessToken, fromDate.toISOString(), now.toISOString());
-
-  return {
-    delta,
-    checkedAt: now.toISOString(),
-  };
-}
+export type {
+  ContributionWindow,
+  GitHubContributionProgress,
+  GitHubDeltaResult,
+  GitHubErrorCode,
+  GitHubRequestOptions,
+  GitHubTotalResult,
+} from "./github-refresh";

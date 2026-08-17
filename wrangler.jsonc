@@ -7,9 +7,15 @@
 		"nodejs_compat",
 		"global_fetch_strictly_public"
 	],
+	"preview_urls": true,
+	"upload_source_maps": false,
+	"limits": {
+		"cpu_ms": 30000
+	},
 	"assets": {
 		"directory": ".open-next/assets",
-		"binding": "ASSETS"
+		"binding": "ASSETS",
+		"run_worker_first": false
 	},
 	"observability": {
 		"enabled": true
@@ -17,6 +23,15 @@
 	"vars": {
 		"APP_URL": "https://ghcommits.com",
 		"NEXT_PUBLIC_REPOSITORY_URL": "https://github.com/BennettSchwartz/GithubCommitsLeaderboard"
+	},
+	"secrets": {
+		"required": [
+			"CRON_SECRET",
+			"GITHUB_CLIENT_ID",
+			"GITHUB_CLIENT_SECRET",
+			"SESSION_SECRET",
+			"TOKEN_ENCRYPTION_KEY"
+		]
 	},
 	// Hyperdrive for Neon PostgreSQL connection pooling
 	// 1. Create config: npx wrangler hyperdrive create neon-leaderboard --connection-string="postgres://USER:PASS@HOST/DB"
@@ -34,6 +49,33 @@
 			"id": "aee89c7b5b11441c9ea84decaaab2a08"
 		}
 	],
+	"queues": {
+		"producers": [
+			{
+				"binding": "REFRESH_QUEUE",
+				"queue": "githubcommits-refresh"
+			}
+		],
+		"consumers": [
+			{
+				"queue": "githubcommits-refresh",
+				"max_batch_size": 1,
+				"max_batch_timeout": 5,
+				"max_retries": 5,
+				"dead_letter_queue": "githubcommits-refresh-dlq",
+				"max_concurrency": 2,
+				"retry_delay": 300
+			},
+			{
+				"queue": "githubcommits-refresh-dlq",
+				"max_batch_size": 10,
+				"max_batch_timeout": 5,
+				"max_retries": 10,
+				"max_concurrency": 1,
+				"retry_delay": 7200
+			}
+		]
+	},
 	// Add a KV namespace for shared rate limiting in production:
 	// "kv_namespaces": [
 	//   {
@@ -44,7 +86,7 @@
 	// ],
 	"triggers": {
 		"crons": [
-			"0 0 */3 * *"
+			"0 * * * *"
 		]
 	}
 }

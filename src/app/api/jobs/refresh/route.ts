@@ -6,7 +6,9 @@ import {
   createServerErrorResponse,
 } from "@/lib/http";
 import { enforceRateLimit } from "@/lib/rate-limit";
-import { runRefreshCycle } from "@/lib/refresh-service";
+import { authorizeAndEnqueueRefresh } from "@/lib/refresh-http";
+import { refreshLogger } from "@/lib/refresh-log";
+import { createRefreshRepository } from "@/lib/refresh-repository";
 import { getRuntimeEnv } from "@/lib/runtime-env";
 
 export async function POST(request: NextRequest) {
@@ -19,23 +21,21 @@ export async function POST(request: NextRequest) {
 
     const env = await getRuntimeEnv();
     const authorization = request.headers.get("authorization");
+    const result = await authorizeAndEnqueueRefresh(
+      {
+        authorization,
+        expectedSecret: env.CRON_SECRET ?? "",
+        targetAt: new Date().toISOString(),
+      },
+      {
+        repository: createRefreshRepository(env),
+        queue: env.REFRESH_QUEUE,
+        clock: () => new Date().toISOString(),
+        logger: refreshLogger,
+      },
+    );
 
-    if (!env.CRON_SECRET || authorization !== `Bearer ${env.CRON_SECRET}`) {
-      return createJsonResponse(
-        {
-          error: "Unauthorized",
-        },
-        {
-          status: 401,
-        },
-      );
-    }
-
-    const result = await runRefreshCycle({
-      source: "http-manual",
-    });
-
-    return createJsonResponse(result);
+    return createJsonResponse(result.body, { status: result.status });
   } catch (error) {
     return createServerErrorResponse(error);
   }

@@ -1,5 +1,10 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 
+import type {
+  QueueProducerLike,
+  RefreshMessageV1,
+} from "./refresh-contract";
+
 export type KvLike = {
   get(key: string): Promise<string | null>;
   put(
@@ -21,7 +26,16 @@ export type RuntimeEnv = {
   DATABASE_URL?: string;
   GITHUB_CLIENT_ID?: string;
   GITHUB_CLIENT_SECRET?: string;
+  GITHUB_GRAPHQL_ENDPOINT?: string;
   HYPERDRIVE?: HyperdriveLike;
+  REFRESH_HYPERDRIVE?: HyperdriveLike;
+  REFRESH_EXPECTED_DATABASE?: string;
+  REFRESH_EXPECTED_SCHEMA?: string;
+  REFRESH_QUEUE: QueueProducerLike<RefreshMessageV1>;
+  REFRESH_PRIMARY_QUEUE_NAME?: string;
+  REFRESH_DLQ_NAME?: string;
+  REFRESH_RETRY_BASE_SECONDS?: string;
+  REFRESH_RETRY_CAP_SECONDS?: string;
   NEXT_PUBLIC_REPOSITORY_URL?: string;
   RATE_LIMITS?: KvLike;
   SESSION_SECRET?: string;
@@ -29,7 +43,7 @@ export type RuntimeEnv = {
 };
 
 export async function getRuntimeEnv(overrides?: Partial<RuntimeEnv>) {
-  const processEnv = process.env as RuntimeEnv;
+  const processEnv = process.env as unknown as RuntimeEnv;
 
   if (overrides) {
     return {

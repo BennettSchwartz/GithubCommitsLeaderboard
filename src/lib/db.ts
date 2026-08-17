@@ -1,21 +1,19 @@
-import { Client } from "pg";
-
 import { decodeCursor, encodeCursor } from "./cursor";
-import { decryptText, encryptText } from "./crypto";
-import { computeAllTimeCommits, computeIncrementalCommits } from "./github";
-import { getRuntimeEnv, type RuntimeEnv } from "./runtime-env";
+import { encryptText } from "./crypto";
+import {
+  withDb,
+  withRefreshDb,
+  withTransaction,
+  type Queryable,
+} from "./postgres";
 import type {
   GitHubIdentity,
   LeaderboardEntry,
   LeaderboardResponse,
   RankLookupResponse,
-  RefreshSummary,
   SessionUser,
-  StoredLeaderboardUser,
   UserLookupResponse,
 } from "./types";
-
-type Queryable = Client;
 
 type LeaderboardRow = {
   github_id: string;
@@ -26,12 +24,6 @@ type LeaderboardRow = {
   github_created_at: Date;
   all_time_commits: number;
   last_updated_at: Date | null;
-};
-
-type StoredUserRow = LeaderboardRow & {
-  id: string;
-  last_checked_at: Date | null;
-  access_token_encrypted: string;
 };
 
 function normalizeLogin(login: string) {
@@ -52,49 +44,12 @@ function mapLeaderboardRow(row: LeaderboardRow, rank: number): LeaderboardEntry 
   };
 }
 
-function getConnectionString(env: RuntimeEnv): string {
-  // Prefer Hyperdrive connection string in production (Cloudflare Workers)
-  if (env.HYPERDRIVE?.connectionString) {
-    return env.HYPERDRIVE.connectionString;
-  }
-  // Fallback to DATABASE_URL for local development
-  if (env.DATABASE_URL) {
-    return env.DATABASE_URL;
-  }
-  throw new Error("No database connection string available. Set HYPERDRIVE binding or DATABASE_URL.");
-}
-
-async function withDb<T>(callback: (client: Client, env: RuntimeEnv) => Promise<T>, overrides?: Partial<RuntimeEnv>) {
-  const env = await getRuntimeEnv(overrides);
-  const connectionString = getConnectionString(env);
-
-  const client = new Client({ connectionString });
-  await client.connect();
-
-  try {
-    return await callback(client, env);
-  } finally {
-    await client.end();
-  }
-}
-
 async function getLeaderboardVersion(client: Queryable) {
   const result = await client.query<{ value: string }>(
     "SELECT value FROM app_meta WHERE key = 'leaderboard_version'",
   );
 
   return Number(result.rows[0]?.value ?? "1");
-}
-
-async function bumpLeaderboardVersion(client: Queryable) {
-  await client.query(`
-    INSERT INTO app_meta (key, value, updated_at)
-    VALUES ('leaderboard_version', '2', NOW())
-    ON CONFLICT (key)
-    DO UPDATE SET
-      value = ((app_meta.value)::integer + 1)::text,
-      updated_at = NOW()
-  `);
 }
 
 async function getStartingRank(client: Queryable, commits: number, githubId: number) {
@@ -445,8 +400,20 @@ export async function findUserByRank(rank: number): Promise<RankLookupResponse> 
   });
 }
 
-export async function upsertConnectedUser(identity: GitHubIdentity, accessToken: string) {
-  return withDb(async (client, env) => {
+export async function upsertConnectedUser(
+  identity: GitHubIdentity,
+  accessToken: string,
+  options?: {
+    testHooks?: {
+      afterLock?: (event: {
+        operation: "oauth_replacement";
+        relation: "users" | "tokens" | "scores";
+        userId: string;
+      }) => Promise<void>;
+    };
+  },
+) {
+  return withRefreshDb(async (client, env) => {
     if (!env.TOKEN_ENCRYPTION_KEY) {
       throw new Error("TOKEN_ENCRYPTION_KEY is required to store OAuth tokens");
     }
@@ -454,10 +421,25 @@ export async function upsertConnectedUser(identity: GitHubIdentity, accessToken:
     const encryptedToken = await encryptText(env.TOKEN_ENCRYPTION_KEY, accessToken);
     const staleLoginReplacement = `renamed-${identity.githubId}`;
 
-    await client.query("BEGIN");
+    return withTransaction(client, async (transaction) => {
+      const capacity = await transaction.query(
+        "SELECT generation FROM refresh_capacity_control WHERE singleton = TRUE FOR UPDATE",
+      );
+      if (capacity.rowCount !== 1) {
+        throw new Error("missing refresh_capacity_control singleton");
+      }
+      await transaction.query(
+        `
+          UPDATE refresh_capacity_control
+          SET generation = generation + 1,
+              evaluated_at = NULL,
+              valid_until = NULL,
+              forecast_sha256 = NULL
+          WHERE singleton = TRUE
+        `,
+      );
 
-    try {
-      await client.query(
+      await transaction.query(
         `
           UPDATE users
           SET login = $1, login_lc = $1, updated_at = NOW()
@@ -467,7 +449,7 @@ export async function upsertConnectedUser(identity: GitHubIdentity, accessToken:
         [staleLoginReplacement, identity.login.toLowerCase(), identity.githubId],
       );
 
-      const userResult = await client.query<{ id: string }>(
+      const userResult = await transaction.query<{ id: string }>(
         `
           INSERT INTO users (
             github_id,
@@ -509,29 +491,53 @@ export async function upsertConnectedUser(identity: GitHubIdentity, accessToken:
       if (!userId) {
         throw new Error("Failed to upsert GitHub user");
       }
+      await options?.testHooks?.afterLock?.({
+        operation: "oauth_replacement",
+        relation: "users",
+        userId,
+      });
 
-      await client.query(
+      await transaction.query(
         `
           INSERT INTO tokens (user_id, access_token_encrypted, updated_at)
-          VALUES ($1, $2, NOW())
+          VALUES ($1, $2, clock_timestamp())
           ON CONFLICT (user_id)
           DO UPDATE SET
             access_token_encrypted = EXCLUDED.access_token_encrypted,
-            updated_at = NOW()
+            updated_at = GREATEST(clock_timestamp(), tokens.updated_at + INTERVAL '1 microsecond')
         `,
         [userId, encryptedToken],
       );
+      await options?.testHooks?.afterLock?.({
+        operation: "oauth_replacement",
+        relation: "tokens",
+        userId,
+      });
 
-      await client.query(
+      await transaction.query(
         `
-          INSERT INTO scores (user_id, all_time_commits, last_checked_at, last_updated_at)
-          VALUES ($1, 0, NULL, NULL)
-          ON CONFLICT (user_id) DO NOTHING
+          INSERT INTO scores (
+            user_id, all_time_commits, last_checked_at, last_updated_at, next_refresh_at
+          )
+          VALUES ($1, 0, NULL, NULL, clock_timestamp())
+          ON CONFLICT (user_id)
+          DO UPDATE SET
+            refresh_claim_id = NULL,
+            refresh_target_at = NULL,
+            refresh_claimed_until = NULL,
+            last_refresh_error_code = NULL,
+            next_refresh_at = COALESCE(
+              scores.last_checked_at + INTERVAL '60 hours',
+              clock_timestamp()
+            )
         `,
         [userId],
       );
-
-      await client.query("COMMIT");
+      await options?.testHooks?.afterLock?.({
+        operation: "oauth_replacement",
+        relation: "scores",
+        userId,
+      });
 
       return {
         userId,
@@ -540,10 +546,7 @@ export async function upsertConnectedUser(identity: GitHubIdentity, accessToken:
         name: identity.name,
         avatarUrl: identity.avatarUrl,
       } satisfies SessionUser;
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    }
+    });
   });
 }
 
@@ -580,209 +583,4 @@ export async function getConnectedSessionUser(userId: string) {
       avatarUrl: row.avatar_url,
     } satisfies SessionUser;
   });
-}
-
-async function listUsersForRefresh(client: Queryable) {
-  const result = await client.query<StoredUserRow>(
-    `
-      SELECT
-        u.id,
-        u.github_id,
-        u.login,
-        u.name,
-        u.avatar_url,
-        u.profile_url,
-        u.github_created_at,
-        s.all_time_commits,
-        s.last_checked_at,
-        s.last_updated_at,
-        t.access_token_encrypted
-      FROM users u
-      JOIN scores s ON s.user_id = u.id
-      JOIN tokens t ON t.user_id = u.id
-      WHERE u.needs_reconnect = FALSE
-      ORDER BY u.github_id ASC
-    `,
-  );
-
-  return result.rows.map(
-    (row) =>
-      ({
-        userId: row.id,
-        githubId: Number(row.github_id),
-        login: row.login,
-        name: row.name,
-        avatarUrl: row.avatar_url,
-        profileUrl: row.profile_url,
-        githubCreatedAt: row.github_created_at.toISOString(),
-        allTimeCommits: row.all_time_commits,
-        lastCheckedAt: row.last_checked_at?.toISOString() ?? null,
-        lastUpdatedAt: row.last_updated_at?.toISOString() ?? null,
-        accessTokenEncrypted: row.access_token_encrypted,
-      }) satisfies StoredLeaderboardUser,
-  );
-}
-
-async function markNeedsReconnect(client: Queryable, userId: string) {
-  await client.query(
-    `
-      UPDATE users
-      SET needs_reconnect = TRUE, updated_at = NOW()
-      WHERE id = $1
-    `,
-    [userId],
-  );
-}
-
-async function updateUserScore(
-  client: Queryable,
-  userId: string,
-  allTimeCommits: number,
-  checkedAt: string,
-) {
-  await client.query(
-    `
-      UPDATE scores
-      SET
-        all_time_commits = $2,
-        last_checked_at = $3,
-        last_updated_at = $3
-      WHERE user_id = $1
-    `,
-    [userId, allTimeCommits, checkedAt],
-  );
-
-  await client.query(
-    `
-      INSERT INTO score_history (user_id, all_time_commits, recorded_at)
-      VALUES ($1, $2, $3)
-    `,
-    [userId, allTimeCommits, checkedAt],
-  );
-}
-
-export async function refreshSingleUser(
-  userId: string,
-  overrides?: Partial<RuntimeEnv>,
-  now = new Date(),
-) {
-  return withDb(async (client, env) => {
-    if (!env.TOKEN_ENCRYPTION_KEY) {
-      throw new Error("TOKEN_ENCRYPTION_KEY is required to refresh scores");
-    }
-
-    const userResult = await client.query<StoredUserRow>(
-      `
-        SELECT
-          u.id,
-          u.github_id,
-          u.login,
-          u.name,
-          u.avatar_url,
-          u.profile_url,
-          u.github_created_at,
-          s.all_time_commits,
-          s.last_checked_at,
-          s.last_updated_at,
-          t.access_token_encrypted
-        FROM users u
-        JOIN scores s ON s.user_id = u.id
-        JOIN tokens t ON t.user_id = u.id
-        WHERE u.id = $1
-        LIMIT 1
-      `,
-      [userId],
-    );
-
-    const row = userResult.rows[0];
-
-    if (!row) {
-      throw new Error(`User ${userId} not found for refresh`);
-    }
-
-    const accessToken = await decryptText(env.TOKEN_ENCRYPTION_KEY, row.access_token_encrypted);
-
-    if (row.last_checked_at) {
-      const nextScore = await computeIncrementalCommits(
-        accessToken,
-        row.last_checked_at.toISOString(),
-        now,
-      );
-      const allTimeCommits = row.all_time_commits + nextScore.delta;
-
-      await updateUserScore(client, userId, allTimeCommits, nextScore.checkedAt);
-      await bumpLeaderboardVersion(client);
-
-      return {
-        allTimeCommits,
-        checkedAt: nextScore.checkedAt,
-      };
-    }
-
-    const nextScore = await computeAllTimeCommits(accessToken, row.github_created_at.toISOString(), now);
-    await updateUserScore(client, userId, nextScore.total, nextScore.checkedAt);
-    await bumpLeaderboardVersion(client);
-
-    return {
-      allTimeCommits: nextScore.total,
-      checkedAt: nextScore.checkedAt,
-    };
-  }, overrides);
-}
-
-export async function refreshAllUsers(
-  overrides?: Partial<RuntimeEnv>,
-  source = "manual",
-  now = new Date(),
-): Promise<RefreshSummary> {
-  return withDb(async (client, env) => {
-    if (!env.TOKEN_ENCRYPTION_KEY) {
-      throw new Error("TOKEN_ENCRYPTION_KEY is required to refresh scores");
-    }
-
-    const users = await listUsersForRefresh(client);
-    let updated = 0;
-    let failed = 0;
-
-    for (const user of users) {
-      try {
-        const accessToken = await decryptText(env.TOKEN_ENCRYPTION_KEY, user.accessTokenEncrypted);
-
-        if (user.lastCheckedAt) {
-          const nextScore = await computeIncrementalCommits(accessToken, user.lastCheckedAt, now);
-          const allTimeCommits = user.allTimeCommits + nextScore.delta;
-
-          await updateUserScore(client, user.userId, allTimeCommits, nextScore.checkedAt);
-        } else {
-          const nextScore = await computeAllTimeCommits(accessToken, user.githubCreatedAt, now);
-          await updateUserScore(client, user.userId, nextScore.total, nextScore.checkedAt);
-        }
-
-        updated += 1;
-      } catch (error) {
-        failed += 1;
-
-        if (
-          error instanceof Error &&
-          (error.message.includes("401") ||
-            error.message.toLowerCase().includes("bad credentials") ||
-            error.message.toLowerCase().includes("resource not accessible"))
-        ) {
-          await markNeedsReconnect(client, user.userId);
-        }
-      }
-    }
-
-    if (updated > 0) {
-      await bumpLeaderboardVersion(client);
-    }
-
-    return {
-      processed: users.length,
-      updated,
-      failed,
-      source,
-      completedAt: now.toISOString(),
-    } satisfies RefreshSummary;
-  }, overrides);
 }

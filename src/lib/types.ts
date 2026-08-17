@@ -57,25 +57,3 @@ export type GitHubIdentity = {
   profileUrl: string;
   createdAt: string;
 };
-
-export type StoredLeaderboardUser = {
-  userId: string;
-  githubId: number;
-  login: string;
-  name: string | null;
-  avatarUrl: string;
-  profileUrl: string;
-  githubCreatedAt: string;
-  allTimeCommits: number;
-  lastCheckedAt: string | null;
-  lastUpdatedAt: string | null;
-  accessTokenEncrypted: string;
-};
-
-export type RefreshSummary = {
-  processed: number;
-  updated: number;
-  failed: number;
-  source: string;
-  completedAt: string;
-};

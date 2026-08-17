@@ -6,33 +6,70 @@ import nextWorker, {
   DOQueueHandler,
   DOShardedTagCache,
 } from "./.open-next/worker.js";
-import { runRefreshCycle } from "./src/lib/refresh-service";
+import { decryptText } from "./src/lib/crypto";
+import {
+  resolveRetryPolicy,
+  type QueueBatchLike,
+} from "./src/lib/refresh-contract";
+import { refreshLogger } from "./src/lib/refresh-log";
+import { createRefreshRepository } from "./src/lib/refresh-repository";
 import type { RuntimeEnv } from "./src/lib/runtime-env";
-
-type WorkerContext = {
-  waitUntil(promise: Promise<unknown>): void;
-};
-
-type ScheduledController = {
-  cron: string;
-  scheduledTime: number;
-};
+import {
+  routeRefreshQueueBatch,
+  runScheduledRefresh,
+  type RefreshWorkerHandlerLike,
+  type WorkerExecutionContextLike,
+} from "./src/lib/refresh-worker";
 
 export { BucketCachePurge, DOQueueHandler, DOShardedTagCache };
 
 const worker = {
-  async fetch(request: Request, env: RuntimeEnv, ctx: WorkerContext) {
+  async fetch(
+    request: Request,
+    env: RuntimeEnv,
+    ctx: WorkerExecutionContextLike,
+  ) {
     return nextWorker.fetch(request, env, ctx);
   },
-  async scheduled(controller: ScheduledController, env: RuntimeEnv, ctx: WorkerContext) {
-    ctx.waitUntil(
-      runRefreshCycle({
-        env,
-        source: `cron:${controller.cron}`,
-        now: new Date(controller.scheduledTime),
-      }),
-    );
+  async scheduled(_controller, env: RuntimeEnv, _ctx: WorkerExecutionContextLike) {
+    void _ctx;
+    await runScheduledRefresh(env, {
+      repository: createRefreshRepository(env),
+      queue: env.REFRESH_QUEUE,
+      clock: () => new Date().toISOString(),
+      logger: refreshLogger,
+    });
   },
-};
+  async queue(
+    batch: QueueBatchLike,
+    env: RuntimeEnv,
+    _ctx: WorkerExecutionContextLike,
+  ) {
+    void _ctx;
+    const repository = createRefreshRepository(env);
+    const clock = () => new Date().toISOString();
+    await routeRefreshQueueBatch(batch, env, {
+      primary: {
+        repository,
+        decryptToken: (encrypted) => {
+          if (!env.TOKEN_ENCRYPTION_KEY) {
+            throw new Error("TOKEN_ENCRYPTION_KEY is required to refresh scores");
+          }
+          return decryptText(env.TOKEN_ENCRYPTION_KEY, encrypted);
+        },
+        fetchImpl: fetch,
+        githubEndpoint: env.GITHUB_GRAPHQL_ENDPOINT,
+        retryPolicy: resolveRetryPolicy(env),
+        clock,
+        logger: refreshLogger,
+      },
+      dlq: {
+        repository,
+        clock,
+        logger: refreshLogger,
+      },
+    });
+  },
+} satisfies RefreshWorkerHandlerLike;
 
 export default worker;
