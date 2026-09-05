@@ -17,7 +17,7 @@ class RecordingQueue {
   }
 }
 
-test("concurrent enqueueDueRefreshes calls claim disjoint users", async () => {
+test("concurrent producers claim disjoint bounded pages without a forecast lease and drain remaining due users", async () => {
   const isolated = await openIsolatedPostgres({ required: true });
   const client = await isolated.connect();
   try {
@@ -33,7 +33,7 @@ test("concurrent enqueueDueRefreshes calls claim disjoint users", async () => {
         'https://example.test/avatar/' || value,
         'https://example.test/user/' || value,
         '2020-01-01T00:00:00Z'::timestamptz
-      FROM generate_series(1, 325) AS value
+      FROM generate_series(1, 625) AS value
     `);
     await client.query(`
       INSERT INTO tokens (user_id, access_token_encrypted)
@@ -43,20 +43,7 @@ test("concurrent enqueueDueRefreshes calls claim disjoint users", async () => {
       INSERT INTO scores (user_id, next_refresh_at)
       SELECT id, '2026-01-01T00:00:00Z'::timestamptz FROM users
     `);
-    const capacity = await client.query(`
-      WITH observed AS (
-        SELECT clock_timestamp() AS target_at
-      )
-      UPDATE refresh_capacity_control
-      SET evaluated_at = observed.target_at - interval '1 minute',
-          valid_until = observed.target_at - interval '1 minute' + interval '6 hours',
-          forecast_sha256 = repeat('a', 64)
-      FROM observed
-      WHERE singleton = TRUE
-      RETURNING to_char(observed.target_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS target_at
-    `);
-    const targetAt = capacity.rows[0].target_at;
-    assert.equal(typeof targetAt, "string");
+    const targetAt = new Date().toISOString();
 
     const repositoryA = createRefreshRepository({ DATABASE_URL: isolated.connectionString });
     const repositoryB = createRefreshRepository({ DATABASE_URL: isolated.connectionString });
@@ -72,12 +59,25 @@ test("concurrent enqueueDueRefreshes calls claim disjoint users", async () => {
     const userIds = messages.map(({ userId }) => userId);
     const claimIds = messages.map(({ claimId }) => claimId);
 
-    assert.equal(left.claimed + right.claimed, 325);
-    assert.equal(messages.length, 325);
-    assert.equal(new Set(userIds).size, 325);
-    assert.equal(new Set(claimIds).size, 325);
-    assert.equal(userIds.some((userId) => userId.endsWith("000000000325")), true);
+    assert.equal(left.claimed, 300);
+    assert.equal(right.claimed, 300);
+    assert.equal(messages.length, 600);
+    assert.equal(new Set(userIds).size, 600);
+    assert.equal(new Set(claimIds).size, 600);
     assert.equal([...queueA.batchSizes, ...queueB.batchSizes].every((size) => size <= 100), true);
+
+    const remainder = await enqueueDueRefreshes({ ...base, repository: repositoryA, queue: queueA });
+    assert.equal(remainder.claimed, 25);
+    const drained = await enqueueDueRefreshes({ ...base, repository: repositoryB, queue: queueB });
+    assert.equal(drained.claimed, 0);
+    const allMessages = [...queueA.messages, ...queueB.messages];
+    assert.equal(allMessages.length, 625);
+    assert.equal(new Set(allMessages.map(({ userId }) => userId)).size, 625);
+    assert.equal(new Set(allMessages.map(({ claimId }) => claimId)).size, 625);
+
+    for (const invalidLimit of [0, -1, 301, 1.5]) {
+      await assert.rejects(repositoryA.claimDueUsers(targetAt, targetAt, invalidLimit), RangeError);
+    }
   } finally {
     await client.end();
     await isolated.cleanup();

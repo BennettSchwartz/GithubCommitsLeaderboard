@@ -16,15 +16,6 @@ export type CasResult = "committed" | "stale";
 export type OnboardingCasResult = "committed" | "stale_winner" | "stale_token" | "stale_reconnect";
 export type RefreshAttemptDisposition = "auth" | "retry" | "terminal" | "dlq";
 
-export class RefreshCapacityLeaseError extends Error {
-  readonly code = "REFRESH_CAPACITY_LEASE_EXPIRED";
-
-  constructor() {
-    super("refresh capacity lease is missing or expired");
-    this.name = "RefreshCapacityLeaseError";
-  }
-}
-
 export type RefreshMutationTestHooks = {
   afterLock?: (event: {
     operation:
@@ -289,36 +280,16 @@ export function createRefreshRepository(
         throw new RangeError(`limit must be between 1 and ${CLAIM_PAGE_SIZE}`);
       }
       return run(async (client) => {
-        const capacity = await client.query<{
-          generation: string;
-          evaluated_at: Date | null;
-          valid_until: Date | null;
-          forecast_sha256: string | null;
-          target_at: Date;
-        }>(
-          `SELECT generation::text, evaluated_at, valid_until, forecast_sha256,
-                  clock_timestamp() AS target_at
-           FROM refresh_capacity_control
-           WHERE singleton = TRUE
-           FOR SHARE`,
+        // Bound dispatch with actual due rows and per-user claims. The legacy
+        // forecast lease had no renewer and stopped every producer after expiry
+        // or an OAuth reconnect. Queue concurrency and GitHub request budgets
+        // bound execution independently of that unused forecast metadata.
+        const clock = await client.query<{ target_at: Date }>(
+          "SELECT clock_timestamp() AS target_at",
         );
-        const lease = capacity.rows[0];
-        if (!lease) throw new RefreshCapacityLeaseError();
-        validateTelemetryClock(requestedTargetAt, lease.target_at, "requestedTargetAt");
-        validateTelemetryClock(requestedEnqueuedAt, lease.target_at, "requestedEnqueuedAt");
-        const generation = Number(lease.generation);
-        if (
-          !Number.isSafeInteger(generation) ||
-          generation < 0 ||
-          !lease.evaluated_at ||
-          !lease.valid_until ||
-          !lease.forecast_sha256 ||
-          !/^[a-f0-9]{64}$/.test(lease.forecast_sha256) ||
-          lease.target_at < lease.evaluated_at ||
-          lease.target_at >= lease.valid_until
-        ) {
-          throw new RefreshCapacityLeaseError();
-        }
+        const observedTargetAt = clock.rows[0]!.target_at;
+        validateTelemetryClock(requestedTargetAt, observedTargetAt, "requestedTargetAt");
+        validateTelemetryClock(requestedEnqueuedAt, observedTargetAt, "requestedEnqueuedAt");
 
         const due = await client.query<{ user_id: string; due_at: Date }>(
           `SELECT s.user_id,
@@ -338,7 +309,7 @@ export function createRefreshRepository(
            ORDER BY due_at ASC, s.user_id ASC
            LIMIT $2
            FOR UPDATE OF s SKIP LOCKED`,
-          [lease.target_at, limit],
+          [observedTargetAt, limit],
         );
         const claimIds = due.rows.map(() => randomUUID());
         if (due.rows.length > 0) {
@@ -353,13 +324,13 @@ export function createRefreshRepository(
             [
               due.rows.map((row) => row.user_id),
               claimIds,
-              lease.target_at,
+              observedTargetAt,
               CLAIM_LEASE_MS,
             ],
           );
           if (updated.rowCount !== due.rows.length) throw new Error("failed to persist every refresh claim");
         }
-        const targetAt = iso(lease.target_at);
+        const targetAt = iso(observedTargetAt);
         return {
           targetAt,
           enqueuedAt: targetAt,

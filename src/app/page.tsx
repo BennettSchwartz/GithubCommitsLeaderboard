@@ -12,7 +12,7 @@ import { SearchPanel } from "@/components/search-panel";
 import { TimeBasedLeaderboard } from "@/components/time-based-leaderboard";
 import type { LeaderboardResponse } from "@/lib/types";
 
-const REPO_URL = process.env.NEXT_PUBLIC_REPOSITORY_URL ?? "https://github.com/your-org/GithubCommitsLeaderboard";
+const REPO_URL = process.env.NEXT_PUBLIC_REPOSITORY_URL ?? "https://github.com/BennettSchwartz/GithubCommitsLeaderboard";
 
 function getStatusMessage(errorCode: string | null, connected: string | null) {
   if (connected === "1") {

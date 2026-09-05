@@ -1,6 +1,7 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "githubcommitsleaderboard",
+	"account_id": "776e99cad6263022ce616ccd9c25663e",
 	"main": "worker.ts",
 	"compatibility_date": "2026-03-02",
 	"compatibility_flags": [
@@ -9,9 +10,6 @@
 	],
 	"preview_urls": true,
 	"upload_source_maps": false,
-	"limits": {
-		"cpu_ms": 30000
-	},
 	"assets": {
 		"directory": ".open-next/assets",
 		"binding": "ASSETS",
@@ -38,15 +36,17 @@
 	// 2. Copy the returned ID below
 	// 3. For local dev with wrangler, set DATABASE_URL in .dev.vars or
 	//    CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE in your shell.
-	// 4. For Cloudflare Workers Builds / CI deploys, also set
-	//    CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE as a secret or env var.
-	//    OpenNext deploy bootstraps Wrangler's local platform proxy before the real remote deploy,
-	//    and Wrangler requires a direct Postgres URL for Hyperdrive during that step.
+	// 4. npm run deploy builds OpenNext and deploys directly with Wrangler.
+	//    Remote deployment does not require local Hyperdrive connection strings.
 	// 5. npm run dev with .env.local bypasses wrangler and uses Next.js directly.
 	"hyperdrive": [
 		{
 			"binding": "HYPERDRIVE",
 			"id": "aee89c7b5b11441c9ea84decaaab2a08"
+		},
+		{
+			"binding": "REFRESH_HYPERDRIVE",
+			"id": "c3216e0fac3d4d839568344228f228e5"
 		}
 	],
 	"queues": {

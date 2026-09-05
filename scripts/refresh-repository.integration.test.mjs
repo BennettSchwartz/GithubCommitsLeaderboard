@@ -20,26 +20,13 @@ async function seedConnected(client, userId, githubId) {
   );
 }
 
-async function installCapacity(client, target) {
-  await client.query(
-    `UPDATE refresh_capacity_control
-     SET evaluated_at = $1::timestamptz - interval '1 minute',
-         valid_until = $1::timestamptz - interval '1 minute' + interval '6 hours',
-         forecast_sha256 = repeat('a', 64)
-     WHERE singleton = TRUE`,
-    [target],
-  );
-}
-
-test("claims due rows and commits one compare-and-swap winner", async () => {
+test("claims due rows without a forecast lease and commits one compare-and-swap winner", async () => {
   const target = new Date().toISOString();
   const isolated = await openIsolatedPostgres({ required: true });
   const client = await isolated.connect();
   try {
     const userId = "00000000-0000-4000-8000-000000000001";
     await seedConnected(client, userId, 1);
-    await installCapacity(client, target);
-
     const repository = createRefreshRepository({ DATABASE_URL: isolated.connectionString });
     const page = await repository.claimDueUsers(target, target, 1);
     assert.equal(page.claims.length, 1);
@@ -68,7 +55,7 @@ test("claims due rows and commits one compare-and-swap winner", async () => {
   }
 });
 
-test("capacity fails closed and token rotation makes an old failure snapshot stale", async () => {
+test("expired forecast metadata does not stop refreshes and token rotation makes an old failure snapshot stale", async () => {
   const isolated = await openIsolatedPostgres({ required: true });
   const client = await isolated.connect();
   try {
@@ -76,17 +63,11 @@ test("capacity fails closed and token rotation makes an old failure snapshot sta
     const target = new Date().toISOString();
     await seedConnected(client, userId, 21);
     const repository = createRefreshRepository({ DATABASE_URL: isolated.connectionString });
-    await assert.rejects(
-      repository.claimDueUsers(target, target, 1),
-      { code: "REFRESH_CAPACITY_LEASE_EXPIRED" },
-    );
-    const unclaimed = await client.query(
-      "SELECT refresh_claim_id FROM scores WHERE user_id = $1",
-      [userId],
-    );
-    assert.equal(unclaimed.rows[0].refresh_claim_id, null);
-
-    await installCapacity(client, target);
+    await client.query(`UPDATE refresh_capacity_control
+      SET evaluated_at = '2020-01-01T00:00:00Z',
+          valid_until = '2020-01-01T06:00:00Z',
+          forecast_sha256 = repeat('a', 64)
+      WHERE singleton = TRUE`);
     const claim = (await repository.claimDueUsers(target, target, 1)).claims[0];
     const snapshot = await repository.beginAttempt(claim.message, target);
     assert.ok(snapshot);
@@ -132,7 +113,6 @@ test("onboarding and DLQ writes preserve committed audit rows after user deletio
     assert.equal(begin.kind, "ready");
     assert.equal(await repository.completeOnboardingSuccess(begin.snapshot, 17), "committed");
     await client.query("UPDATE scores SET next_refresh_at = '2020-01-01Z' WHERE user_id = $1", [userId]);
-    await installCapacity(client, target);
     const claim = (await repository.claimDueUsers(target, target, 1)).claims[0];
     assert.equal(await repository.reconcileDeadLetter("dlq-31", claim.message, target), "committed");
     assert.equal(await repository.reconcileDeadLetter("dlq-31", claim.message, target), "stale");

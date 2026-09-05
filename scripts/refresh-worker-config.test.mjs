@@ -65,7 +65,7 @@ function assertProductionConfig(config) {
     "global_fetch_strictly_public",
   ]);
   assert.deepEqual(config.observability, { enabled: true });
-  assert.deepEqual(config.limits, { cpu_ms: 30000 });
+  assert.equal(config.limits, undefined, "use the account's supported runtime limits");
   assert.equal(config.preview_urls, true);
   assert.ok(
     config.upload_source_maps === undefined || config.upload_source_maps === false,
@@ -85,10 +85,14 @@ function assertProductionConfig(config) {
       binding: "HYPERDRIVE",
       id: "aee89c7b5b11441c9ea84decaaab2a08",
     },
+    {
+      binding: "REFRESH_HYPERDRIVE",
+      id: "c3216e0fac3d4d839568344228f228e5",
+    },
   ]);
   assert.equal(
     config.hyperdrive.some((binding) => binding.binding === "REFRESH_HYPERDRIVE"),
-    false,
+    true,
   );
   assert.equal(config.vars?.GITHUB_GRAPHQL_ENDPOINT, undefined);
   assert.equal(config.vars?.REFRESH_PRIMARY_QUEUE_NAME, undefined);
@@ -109,7 +113,7 @@ test("production Worker config validation fails closed on scheduler drift", () =
     ["DLQ consumer", (value) => value.queues.consumers.splice(1, 1)],
     ["consumer retry", (value) => (value.queues.consumers[0].max_retries = 4)],
     ["cron", (value) => (value.triggers.crons = [])],
-    ["CPU limit", (value) => delete value.limits.cpu_ms],
+    ["unsupported CPU override", (value) => (value.limits = { cpu_ms: 30000 })],
     ["observability", (value) => (value.observability.enabled = false)],
     ["preview", (value) => (value.preview_urls = false)],
     ["secret inventory", (value) => value.secrets.required.pop()],
@@ -157,7 +161,7 @@ test("worker TypeScript gate includes the adapter and generated bindings", () =>
   });
 });
 
-test("generated bindings expose Queue, cached Hyperdrive, and reviewed vars", () => {
+test("generated bindings expose Queue, cached and refresh Hyperdrive, and reviewed vars", () => {
   const declarations = readFileSync(
     new URL("worker-configuration.d.ts", ROOT),
     "utf8",
@@ -169,7 +173,7 @@ test("generated bindings expose Queue, cached Hyperdrive, and reviewed vars", ()
   );
   assert.match(declarations, /REFRESH_QUEUE:\s*Queue/);
   assert.match(declarations, /HYPERDRIVE:\s*Hyperdrive/);
-  assert.doesNotMatch(declarations, /REFRESH_HYPERDRIVE:/);
+  assert.match(declarations, /REFRESH_HYPERDRIVE:\s*Hyperdrive/);
   assert.match(declarations, /APP_URL:\s*"https:\/\/ghcommits\.com"/);
   assert.match(
     declarations,

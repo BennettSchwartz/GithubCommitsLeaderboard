@@ -25,7 +25,7 @@ GitHub Commits Leaderboard aggregates commit contribution data from connected Gi
 - Cursor-based paginated leaderboard (50 users per page)
 - User search by GitHub username
 - Public REST API with rate limiting
-- Automatic score refresh every 3 days
+- Automatic score refresh when a connected account is due after 60 hours
 - Built with GitHub's Primer design system
 
 ---
@@ -41,7 +41,7 @@ The easiest way to participate is to use the official instance at **[ghcommits.c
 5. Grant access to organizations you want commits counted from
 6. Your profile will appear on the leaderboard after processing
 
-Your commit count is refreshed automatically every 3 days.
+Your account becomes due for refresh 60 hours after its last successful check. An hourly job sends due accounts to a queue for processing.
 
 ### Get Your Badge
 
@@ -103,7 +103,12 @@ DATABASE_URL=postgresql://user:password@host/database
 
 The application automatically uses `DATABASE_URL` when the Hyperdrive binding is not available.
 
-If you use Hyperdrive with Wrangler-based commands, Wrangler also accepts a binding-specific local fallback connection string via `CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE`.
+For local `wrangler dev`, set both Hyperdrive fallback connection strings in your shell:
+
+```env
+CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE=postgresql://user:password@host/database
+CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_REFRESH_HYPERDRIVE=postgresql://user:password@host/database
+```
 
 ### GitHub OAuth App Setup
 
@@ -115,16 +120,27 @@ If you use Hyperdrive with Wrangler-based commands, Wrangler also accepts a bind
 
 ### Production Deployment (Cloudflare Workers)
 
-**Step 1:** Create a Hyperdrive configuration (this securely stores your database credentials with Cloudflare):
+The checked-in `wrangler.jsonc` contains the official instance's account, Worker name, resource IDs, and domain. For another instance, set your own values. Existing deployments can reuse their configured resources and secrets.
+
+**1. Configure database connections and queues.** Authenticate Wrangler with `npx wrangler login` or `CLOUDFLARE_API_TOKEN`. With your production `DATABASE_URL` exported in the shell, create any missing Hyperdrive configurations:
 
 ```bash
-npx wrangler login
-npx wrangler hyperdrive create neon-leaderboard --connection-string="postgres://USER:PASS@HOST/DB"
+npx wrangler hyperdrive create neon-leaderboard --connection-string="$DATABASE_URL"
+npx wrangler hyperdrive create neon-leaderboard-refresh --connection-string="$DATABASE_URL" --caching-disabled
 ```
 
-**Step 2:** Copy the returned Hyperdrive ID to `wrangler.jsonc` (replace `<YOUR_HYPERDRIVE_ID>`)
+Bind the first ID as `HYPERDRIVE` for cached leaderboard reads and the second as `REFRESH_HYPERDRIVE` for mutations and fresh scheduler state. Both must point to the same database; `REFRESH_HYPERDRIVE` must have caching disabled.
 
-**Step 3:** Set secrets:
+Create the primary and dead-letter queues if they do not exist:
+
+```bash
+npx wrangler queues create githubcommits-refresh --message-retention-period-secs=86400
+npx wrangler queues create githubcommits-refresh-dlq --message-retention-period-secs=86400
+```
+
+Both queues use 24-hour message retention. The checked-in configuration binds `REFRESH_QUEUE` to the primary queue and attaches consumers to both queues. The primary consumer processes one message per batch, with at most two concurrent consumers.
+
+**2. Configure variables and secrets.** Set `APP_URL` and `NEXT_PUBLIC_REPOSITORY_URL` in `wrangler.jsonc`. For a new instance, upload these secrets; an existing deployment keeps its current values:
 
 ```bash
 npx wrangler secret put GITHUB_CLIENT_ID
@@ -134,21 +150,32 @@ npx wrangler secret put SESSION_SECRET
 npx wrangler secret put CRON_SECRET
 ```
 
-**Step 4:** Set a direct Postgres connection string for Wrangler's Hyperdrive bootstrap in local/CI environments.
-
-For local `wrangler dev`, add this to `.dev.vars` or your shell:
-
-```env
-CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE=postgresql://user:password@host/database
-```
-
-For Cloudflare Workers Builds / CI deploys, add the same variable as an environment variable or secret in the Cloudflare dashboard. OpenNext's deploy flow calls Wrangler's platform proxy before the real remote deploy, and Wrangler requires this local Hyperdrive fallback even when the target deployment is production.
-
-**Step 5:** Deploy:
+**3. Apply database migrations and deploy.** Point the environment file at the production database, then run:
 
 ```bash
+node --env-file=.env.local scripts/migrate.mjs
 npm run deploy
 ```
+
+The migration runner applies pending SQL files transactionally. `npm run deploy` builds OpenNext and deploys the custom Worker and generated assets directly with Wrangler. Remote deployment uses the configured Hyperdrive IDs and does not require local Hyperdrive connection strings, including in CI. Those fallback strings are only for local Wrangler development.
+
+**4. Activate the queue writer on the first scheduler deployment.** After deployment succeeds, switch the database from the legacy writer and reconcile users against a fresh UTC timestamp:
+
+```bash
+node --env-file=.env.local --import tsx scripts/set-refresh-writer-generation.ts --from legacy --to queue_v1
+node --env-file=.env.local --import tsx scripts/reconcile-refresh-cutover.ts --observed-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+```
+
+This is a one-time transition; later deployments keep `queue_v1` active. The hourly Cron Trigger (`0 * * * *`) dispatches at most 300 due accounts per invocation. Accounts become due 60 hours after a successful check; failed attempts use the queue retry and dead-letter handling.
+
+**5. Trigger a dispatch when needed.** With the deployed `CRON_SECRET` exported in your shell:
+
+```bash
+curl --fail-with-body -X POST https://ghcommits.com/api/jobs/refresh \
+  -H "Authorization: Bearer $CRON_SECRET"
+```
+
+Use your own domain for another instance. The response reports `claimed`, `enqueued`, and `released` counts; GitHub processing happens asynchronously in the queue consumer.
 
 ---
 
