@@ -1,7 +1,6 @@
 import type { GitHubContributionProgress } from "./github-refresh";
 import {
   computeAllTimeCommits,
-  computeIncrementalCommits,
 } from "./github-refresh";
 import type { RefreshLogger } from "./refresh-log";
 import type {
@@ -79,22 +78,7 @@ async function computeCandidate(
     endpoint: deps.githubEndpoint,
   };
 
-  if (snapshot.startingCheckpoint) {
-    input.onProgress({
-      window: 1,
-      total: 1,
-      commitsSoFar: snapshot.allTimeCommits,
-      yearLabel: "Updating...",
-    });
-    const result = await computeIncrementalCommits(
-      token,
-      snapshot.startingCheckpoint,
-      targetAt,
-      requestOptions,
-    );
-    return snapshot.allTimeCommits + result.delta;
-  }
-
+  // Full recount, not a delta: see refresh-consumer for why.
   const result = await computeAllTimeCommits(
     token,
     snapshot.githubCreatedAt,
