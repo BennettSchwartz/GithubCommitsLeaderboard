@@ -13,7 +13,6 @@ import {
   GitHubRequestBudget,
   GitHubRequestError,
   computeAllTimeCommits,
-  computeIncrementalCommits,
   type GitHubErrorCode,
 } from "./github-refresh";
 import { logRefreshEvent, type RefreshLogger } from "./refresh-log";
@@ -334,28 +333,17 @@ export async function consumeRefreshMessage({
       ...(githubEndpoint === undefined ? {} : { endpoint: githubEndpoint }),
     };
     const targetAt = new Date(attempt.targetAt);
-    let allTimeCommits: number;
-
-    if (attempt.startingCheckpoint === null) {
-      const result = await computeAllTimeCommits(
-        token,
-        attempt.githubCreatedAt,
-        targetAt,
-        requestOptions,
-      );
-      allTimeCommits = result.total;
-    } else {
-      const result = await computeIncrementalCommits(
-        token,
-        attempt.startingCheckpoint,
-        targetAt,
-        requestOptions,
-      );
-      allTimeCommits = attempt.allTimeCommits + result.delta;
-      if (!Number.isSafeInteger(allTimeCommits) || allTimeCommits < 0) {
-        throw new GitHubRequestError("INVALID_RESPONSE", "GitHub contribution total was invalid");
-      }
-    }
+    // Recount the full history each time. GitHub dates a contribution by its
+    // commit time, so commits that land after an earlier check (late pushes,
+    // newly verified emails) would be missed by a since-last-check delta.
+    // The yearly windows go out as one aliased GraphQL request either way.
+    const result = await computeAllTimeCommits(
+      token,
+      attempt.githubCreatedAt,
+      targetAt,
+      requestOptions,
+    );
+    const allTimeCommits = result.total;
 
     let committed: CasResult;
     try {

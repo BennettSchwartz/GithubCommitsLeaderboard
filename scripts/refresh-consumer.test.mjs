@@ -97,17 +97,28 @@ class FakeRepository {
   }
 }
 
-function incrementalSuccessFetch(delta = 6) {
-  return async () => new Response(JSON.stringify({
-    data: {
-      viewer: {
-        contributionsCollection: {
-          totalCommitContributions: delta - 1,
-          restrictedContributionsCount: 1,
-        },
-      },
-    },
-  }), { status: 200, headers: { "content-type": "application/json" } });
+// Answers both query shapes a full recount can send: the aliased yearly query,
+// or one window at a time after a resource-limit fallback. The aliased total
+// lands in the first window so assertions can name the absolute score.
+function allTimeSuccessFetch(total = 46) {
+  const collection = (count) => ({
+    totalCommitContributions: Math.max(count - 1, 0),
+    restrictedContributionsCount: count > 0 ? 1 : 0,
+  });
+  return async (_url, init) => {
+    const query = init ? JSON.parse(init.body).query : "";
+    const aliases = [...query.matchAll(/(year\d+):/g)].map((match) => match[1]);
+    const viewer = aliases.length === 0
+      ? { contributionsCollection: collection(total) }
+      : Object.fromEntries(aliases.map((alias, index) => [
+        alias,
+        collection(index === 0 ? total : 0),
+      ]));
+    return new Response(JSON.stringify({ data: { viewer } }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  };
 }
 
 function options({ message, repository, fetchImpl, decryptToken, events } = {}) {
@@ -115,7 +126,7 @@ function options({ message, repository, fetchImpl, decryptToken, events } = {}) 
     message: message ?? fakeMessage(),
     repository: repository ?? new FakeRepository(),
     decryptToken: decryptToken ?? (async () => "dummy-token"),
-    fetchImpl: fetchImpl ?? incrementalSuccessFetch(),
+    fetchImpl: fetchImpl ?? allTimeSuccessFetch(),
     retryPolicy: { baseSeconds: 300, capSeconds: 3_600 },
     clock: () => ATTEMPTED_AT,
     logger: (event) => (events ?? []).push(event),
@@ -436,7 +447,7 @@ test("old-account resource fallback performs at most 40 GitHub requests", async 
           errors: [{ type: "RESOURCE_LIMITS_EXCEEDED", message: "detail" }],
         }), { status: 200, headers: { "content-type": "application/json" } });
       }
-      return incrementalSuccessFetch(1)();
+      return allTimeSuccessFetch(1)();
     },
   }));
 

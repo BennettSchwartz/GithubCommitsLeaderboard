@@ -41,18 +41,17 @@ const committed = {
   percentile: 98,
 };
 
-function contributionResponse(publicCommits = 5, privateCommits = 2) {
+// Answers the aliased yearly query a full recount sends, with the whole
+// total (45 public + 2 private) in the first window.
+function contributionResponse(init) {
+  const query = JSON.parse(init.body).query;
+  const aliases = [...query.matchAll(/(year\d+):/g)].map((match) => match[1]);
+  const viewer = Object.fromEntries(aliases.map((alias, index) => [alias, {
+    totalCommitContributions: index === 0 ? 45 : 0,
+    restrictedContributionsCount: index === 0 ? 2 : 0,
+  }]));
   return new Response(
-    JSON.stringify({
-      data: {
-        viewer: {
-          contributionsCollection: {
-            totalCommitContributions: publicCommits,
-            restrictedContributionsCount: privateCommits,
-          },
-        },
-      },
-    }),
+    JSON.stringify({ data: { viewer } }),
     { status: 200, headers: { "Content-Type": "application/json" } },
   );
 }
@@ -89,9 +88,9 @@ function onboardingHarness({ begins, outcomes = [], loaded = [committed] }) {
       calls.decrypt.push(value);
       return `plain:${value}`;
     },
-    async fetchImpl() {
+    async fetchImpl(_url, init) {
       calls.fetch += 1;
-      return contributionResponse();
+      return contributionResponse(init);
     },
     clock: () => TARGET,
     logger() {},
@@ -132,13 +131,12 @@ test("committed onboarding returns the stored database result", async () => {
   const result = await runOnboardingRefresh(harness.input, harness.deps);
   assert.deepEqual(result, committed);
   assert.equal(harness.calls.complete[0].total, 47);
+  // A returning user is recounted in full, so progress walks the yearly
+  // windows instead of showing a single "Updating..." delta step.
   assert.deepEqual(harness.calls.progress, [
-    {
-      window: 1,
-      total: 1,
-      commitsSoFar: 40,
-      yearLabel: "Updating...",
-    },
+    { window: 1, total: 3, commitsSoFar: 47, yearLabel: "2024" },
+    { window: 2, total: 3, commitsSoFar: 47, yearLabel: "2025" },
+    { window: 3, total: 3, commitsSoFar: 47, yearLabel: "2026" },
   ]);
 });
 
